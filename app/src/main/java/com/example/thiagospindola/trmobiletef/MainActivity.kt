@@ -81,12 +81,12 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
                 var rxBuffer = ByteArray(100)
                 var iRet = serialOpen()
                 if (iRet === 0) {
-                    txBuffer[0] = 24.toByte()
+                    txBuffer[0] = PPFuncs.CAN
                     iRet = serialTx(txBuffer, txBuffer.size)
                     if (iRet === 0) {
                         iRet = serialRx(80000, rxBuffer.size, rxBuffer)
                         if (iRet >= 0) {
-                            if (rxBuffer[0] !== 4.toByte()) {
+                            if (rxBuffer[0] !== PPFuncs.EOT) {
                                 iRet = -83
                             } else {
                                 iRet = 0
@@ -101,20 +101,36 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
             }
 
             R.id.btSend -> {
-                //sendData()
-                var txBuffer = ByteArray(6)
-                var rxBuffer = ByteArray(100)
-                var s:String = "OPN000"
+                if(!senddatatest) {
+                    var rxBuffer = ByteArray(100)
+                    var s: String = "OPN000"
 
-                txBuffer = s.toByteArray(charset("ISO-8859-1"))
-                var iRet = serialTx(txBuffer, txBuffer.size)
-                if (iRet === 0) {
-                    iRet = serialRx(5000, rxBuffer.size, rxBuffer)
-                    if (iRet >= 0) {
-                        if (rxBuffer[0] !== 0.toByte()) {
-                            iRet = -83
-                        } else {
-                            iRet = 0
+                    var txBuffer = ByteArray(s.length + 4)
+                    PPFuncs.prepareTxBuffer(s, txBuffer.size, txBuffer)
+                    var iRet = serialTx(txBuffer, txBuffer.size)
+                    if (iRet == 0) {
+                        iRet = serialRx(5000, rxBuffer.size, rxBuffer)
+                        if (iRet >= 0) {
+                            if (rxBuffer[0] == PPFuncs.ACK) {
+                                Log.d("Log", "PP_Open com sucesso")
+                                senddatatest = true
+                            }
+                        }
+                    }
+                }
+                else {
+                    var rxBuffer = ByteArray(100)
+                    var s: String = "CLO032      PEAK          PAYMENTS    "
+
+                    var txBuffer = ByteArray(s.length + 4)
+                    PPFuncs.prepareTxBuffer(s, txBuffer.size, txBuffer)
+                    var iRet = serialTx(txBuffer, txBuffer.size)
+                    if (iRet == 0) {
+                        iRet = serialRx(5000, rxBuffer.size, rxBuffer)
+                        if (iRet >= 0) {
+                            if (rxBuffer[0] == PPFuncs.ACK) {
+                                Log.d("Log", "PP_Open com sucesso")
+                            }
                         }
                     }
                 }
@@ -207,15 +223,6 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         workerThread.start()
     }
 
-    private fun sendData() {
-        var msg:String
-        if(!senddatatest)
-            msg = "OPN000"
-        else
-            msg = "CLO032      PEAK          PAYMENTS    "
-        btOutputStream.write(msg.toByteArray())
-
-    }
 
     private fun closeBT() {
         stopWorker = true
@@ -223,8 +230,6 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         btInputStream.close()
         btSocket.close()
     }
-
-
 
 
     private fun realizaConexao(): Int {
@@ -236,18 +241,6 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         try {
             btSocket.connect()
             Log.d("DBG - SerialBT","Conectado ao bluetooth")
-//            val dados = ByteArray(1000)
-//            var retorno: Int
-//            do {
-//                retorno = serialRx(30, dados.size, dados)
-//                try {
-//                    Thread.sleep(30)
-//                    continue
-//                } catch (e: InterruptedException) {
-//                    continue
-//                }
-//
-//            } while (retorno > 0)
             return 0
         } catch (e2: Exception) {
             Log.d("DBG - SerialBT","Erro ao conectar pinpad: " + e2.message)
@@ -320,7 +313,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         if (timeout < 0 || tamanho <= 0) {
             return -8
         }
-        if (btSocket == null || !btSocket.isConnected()) {
+        if (!btSocket.isConnected()) {
             Log.d("DBG - SerialBT","Dispositivo desconectado ao receber")
             return PPRetCodes.PP_COMMERR
         }
